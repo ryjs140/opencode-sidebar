@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.2 — 2026-10-19
+
+- Added Simplified Chinese (`zh-cn`) localization for every contributed
+  setting (section title, descriptions, theme/workspace enum labels and
+  descriptions) plus command titles and the extension description. VS Code
+  selects the language automatically from its display language through
+  `package.nls.json` and `package.nls.zh-cn.json`; no extra setting is needed.
+
 ## 0.22.1 — 2026-10-19
 
 Visual alignment with the Codex sidebar (no functional changes; OpenCode itself

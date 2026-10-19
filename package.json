@@ -1,8 +1,8 @@
 {
   "name": "opencode-web-sidebar",
-  "displayName": "OpenCode Sidebar GUI",
-  "description": "OpenCode web-UI in the sidebar panel - connects to your web server or starts a new one, adds narrow UI adaptations, multi-server management...",
-  "version": "0.22.1",
+  "displayName": "%displayName%",
+  "description": "%description%",
+  "version": "0.22.2",
   "license": "MIT",
   "publisher": "ryjs",
   "author": {
@@ -55,7 +55,7 @@
     "commands": [
       {
         "command": "opencode-web-sidebar.openPanel",
-        "title": "Toggle OpenCode Panel",
+        "title": "%command.openPanel.title%",
         "category": "OpenCode",
         "icon": {
           "light": "media/icon.svg",
@@ -64,42 +64,42 @@
       },
       {
         "command": "opencode-web-sidebar.closePanel",
-        "title": "Close Panel",
+        "title": "%command.closePanel.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.focusPanel",
-        "title": "Focus Panel",
+        "title": "%command.focusPanel.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.openFile",
-        "title": "Open File",
+        "title": "%command.openFile.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.setPassword",
-        "title": "Set Server Password",
+        "title": "%command.setPassword.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.clearPassword",
-        "title": "Clear Server Password",
+        "title": "%command.clearPassword.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.startServer",
-        "title": "Start OpenCode Web Server",
+        "title": "%command.startServer.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.stopServer",
-        "title": "Stop OpenCode Web Server",
+        "title": "%command.stopServer.title%",
         "category": "OpenCode"
       },
       {
         "command": "opencode-web-sidebar.openSettings",
-        "title": "Settings",
+        "title": "%command.openSettings.title%",
         "category": "OpenCode",
         "icon": "$(gear)"
       }
@@ -134,12 +134,12 @@
       }
     ],
     "configuration": {
-      "title": "OpenCode Sidebar",
+      "title": "%configuration.title%",
       "properties": {
         "opencode-web-sidebar.url": {
           "type": "string",
           "default": "http://localhost:4096",
-          "description": "URL of the OpenCode web UI to embed in the sidebar panel (deprecated: use servers list instead)"
+          "description": "%config.url.description%"
         },
         "opencode-web-sidebar.servers": {
           "type": "array",
@@ -158,35 +158,35 @@
             "properties": {
               "id": {
                 "type": "string",
-                "description": "Unique identifier for this server"
+                "description": "%config.servers.items.id.description%"
               },
               "url": {
                 "type": "string",
-                "description": "URL of the server"
+                "description": "%config.servers.items.url.description%"
               },
               "label": {
                 "type": "string",
-                "description": "Display label for the server"
+                "description": "%config.servers.items.label.description%"
               },
               "isWsl": {
                 "type": "boolean",
-                "description": "Translate workspace paths for WSL/Linux"
+                "description": "%config.servers.items.isWsl.description%"
               },
               "isDefault": {
                 "type": "boolean",
-                "description": "Whether this is the default server"
+                "description": "%config.servers.items.isDefault.description%"
               },
               "serverCommand": {
                 "type": "string",
-                "description": "Command to start the server locally"
+                "description": "%config.servers.items.serverCommand.description%"
               },
               "username": {
                 "type": "string",
-                "description": "Username for authentication"
+                "description": "%config.servers.items.username.description%"
               },
               "authEnabled": {
                 "type": "boolean",
-                "description": "Enable authentication fields"
+                "description": "%config.servers.items.authEnabled.description%"
               }
             },
             "required": [
@@ -194,22 +194,22 @@
               "url"
             ]
           },
-          "description": "List of configured OpenCode servers"
+          "description": "%config.servers.description%"
         },
         "opencode-web-sidebar.hideButton": {
           "type": "boolean",
           "default": false,
-          "description": "Hide the OpenCode button from the editor title bar"
+          "description": "%config.hideButton.description%"
         },
         "opencode-web-sidebar.autoReconnect": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically attempt to reconnect when the server is unreachable"
+          "description": "%config.autoReconnect.description%"
         },
         "opencode-web-sidebar.maxReconnectAttempts": {
           "type": "number",
           "default": 0,
-          "description": "Maximum number of reconnection attempts (0 = unlimited)"
+          "description": "%config.maxReconnectAttempts.description%"
         },
         "opencode-web-sidebar.theme": {
           "type": "string",
@@ -221,23 +221,23 @@
             "beige"
           ],
           "enumItemLabels": [
-            "Match Codex (beige)",
-            "Follow VS Code theme",
-            "OpenCode native theme",
-            "Beige (deprecated alias)"
+            "%config.theme.enum.codex.label%",
+            "%config.theme.enum.vscode.label%",
+            "%config.theme.enum.native.label%",
+            "%config.theme.enum.beige.label%"
           ],
           "enumDescriptions": [
-            "Use the fixed Codex-style palette: one unified beige page (#F2F1EA), a white composer (#FFFFFF), neutral text (#292929 / #656563) and a light auxiliary tone (#ECEBE4), with a matching dark variant when VS Code is dark.",
-            "Follow the active VS Code color theme by reading the live theme colors from the webview; updates live when the theme changes. Falls back to the Codex palette while colors are unavailable.",
-            "Leave OpenCode's own theme and color scheme untouched.",
-            "Deprecated alias for \"codex\"; kept so existing settings keep working."
+            "%config.theme.enum.codex.description%",
+            "%config.theme.enum.vscode.description%",
+            "%config.theme.enum.native.description%",
+            "%config.theme.enum.beige.description%"
           ],
-          "description": "Theme applied inside the embedded OpenCode web UI."
+          "description": "%config.theme.description%"
         },
         "opencode-web-sidebar.serverCommand": {
           "type": "string",
           "default": "opencode web --port 4096",
-          "description": "Command to start the OpenCode web server (deprecated: use per-server serverCommand instead)"
+          "description": "%config.serverCommand.description%"
         },
         "opencode-web-sidebar.workspacePathStyle": {
           "type": "string",
@@ -247,10 +247,10 @@
             "wsl"
           ],
           "enumItemLabels": [
-            "Do not translate",
-            "WSL / Linux"
+            "%config.workspacePathStyle.enum.none.label%",
+            "%config.workspacePathStyle.enum.wsl.label%"
           ],
-          "description": "Path translation mode (deprecated: use per-server isWsl instead)"
+          "description": "%config.workspacePathStyle.description%"
         }
       }
     }
@@ -262,6 +262,7 @@
     "lint": "eslint src",
     "pretest": "npm run compile && npm run lint",
     "test": "node --test out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js out/OpenCodePanel.test.js out/SidebarTheme.test.js",
+    "verify:nls": "node scripts/verify-nls.cjs",
     "publish:marketplace": "vsce package && vsce publish",
     "publish:openvsx": "bash -c \"read -p 'Enter packaged filename: ' filename && read -sp 'Enter openvsx token: ' token && echo && npx ovsx publish \\\"$filename\\\" -p \\\"$token\\\"\"",
     "publish": "npm version minor --no-git-tag-version && npm run publish:marketplace && npm run publish:openvsx"
