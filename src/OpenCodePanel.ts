@@ -121,7 +121,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     private readonly _secrets: vscode.SecretStorage,
     private readonly _globalState: vscode.Memento,
   ) {
-    this._log = vscode.window.createOutputChannel('OpenCode Sidebar');
+    this._log = vscode.window.createOutputChannel(vscode.l10n.t('OpenCode Sidebar'));
     this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this._statusBarItem.command = 'opencode-web-sidebar.focusPanel';
     this.updateStatusBar();
@@ -242,20 +242,29 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     return this._servers.find(s => s.id === this._activeServerId);
   }
 
+  private displayServerLabel(server: ServerConfig, pendingLabel?: string): string {
+    if (pendingLabel !== undefined) return pendingLabel;
+    const label = server.label || '';
+    if (server.id === 'default' && (label === '' || label === 'Local Server')) {
+      return vscode.l10n.t('Local Server');
+    }
+    return label;
+  }
+
   private renderCurrentServerCard(): string {
     const server = this.getActiveServer();
     if (!server) return '';
 
     let dotClass = 'status-dot';
     let statusLabel = '';
-    if (this._connectionState === 'connected') { dotClass += ' connected'; statusLabel = 'Connected'; }
-    else if (this._connectionState === 'checking') { dotClass += ' pulse'; statusLabel = 'Connecting...'; }
-    else if (this._connectionState === 'starting') { dotClass += ' pulse'; statusLabel = 'Starting...'; }
-    else if (this._connectionState === 'auth-required') { dotClass += ' auth'; statusLabel = 'Password required'; }
-    else if (this._isReconnecting) { dotClass += ' pulse'; statusLabel = 'Reconnecting...'; }
-    else { dotClass += ' disconnected'; statusLabel = 'Disconnected'; }
+    if (this._connectionState === 'connected') { dotClass += ' connected'; statusLabel = vscode.l10n.t('Connected'); }
+    else if (this._connectionState === 'checking') { dotClass += ' pulse'; statusLabel = vscode.l10n.t('Connecting...'); }
+    else if (this._connectionState === 'starting') { dotClass += ' pulse'; statusLabel = vscode.l10n.t('Starting...'); }
+    else if (this._connectionState === 'auth-required') { dotClass += ' auth'; statusLabel = vscode.l10n.t('Password required'); }
+    else if (this._isReconnecting) { dotClass += ' pulse'; statusLabel = vscode.l10n.t('Reconnecting...'); }
+    else { dotClass += ' disconnected'; statusLabel = vscode.l10n.t('Disconnected'); }
 
-    const label = escapeAttr(server.label || server.url);
+    const label = escapeAttr(this.displayServerLabel(server) || server.url);
     const url = escapeAttr(server.url);
 
     return `<div class="card" style="cursor:pointer;width:100%;max-width:400px" onclick="selectServer()">
@@ -267,8 +276,8 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         <div class="card-description">${url}</div>
       </div>
       <div class="card-content" style="flex-direction:row;justify-content:space-between;align-items:center;padding-top:2px">
-        <span style="font-size:11px;color:var(--muted-foreground)">${statusLabel}</span>
-        <span style="font-size:11px;color:var(--muted-foreground)">Manage &rarr;</span>
+        <span style="font-size:11px;color:var(--muted-foreground)">${escapeAttr(statusLabel)}</span>
+        <span style="font-size:11px;color:var(--muted-foreground)">${escapeAttr(vscode.l10n.t('Manage →'))}</span>
       </div>
     </div>`;
   }
@@ -426,7 +435,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     this._servers.push({
       id,
       url: config.url,
-      label: config.label || `Server #${count}`,
+      label: config.label || vscode.l10n.t('Server #{0}', count),
       authEnabled: false,
       isWsl: config.isWsl || false,
       isDefault: false,
@@ -549,8 +558,10 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
           break;
         case 'removeServer':
           if (msg.serverId) {
-            const result = await vscode.window.showWarningMessage('Remove this server?', { modal: true }, 'Remove');
-            if (result === 'Remove') {
+            const removeLabel = vscode.l10n.t('Remove');
+            const result = await vscode.window.showWarningMessage(
+              vscode.l10n.t('Remove this server?'), { modal: true }, removeLabel);
+            if (result === removeLabel) {
               this._pendingChanges.delete(msg.serverId);
               await this.removeServer(msg.serverId);
             }
@@ -641,7 +652,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     try {
       await vscode.commands.executeCommand('workbench.action.toggleAuxiliaryBar');
     } catch {
-      vscode.window.showErrorMessage('Failed to close sidebar panel');
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to close sidebar panel'));
     }
   }
 
@@ -903,22 +914,22 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     let statusText: string;
     if (this._connectionState === 'checking') {
       statusColor = '#e5c07b';
-      statusText = 'Checking...';
+      statusText = vscode.l10n.t('Checking...');
     } else if (this._connectionState === 'starting') {
       statusColor = '#e5c07b';
-      statusText = 'Starting...';
+      statusText = vscode.l10n.t('Starting...');
     } else if (this._isReconnecting) {
       statusColor = '#e06c75';
-      statusText = 'Reconnecting...';
+      statusText = vscode.l10n.t('Reconnecting...');
     } else if (this._connectionState === 'connected') {
       statusColor = '#4ec94e';
-      statusText = 'Connected';
+      statusText = vscode.l10n.t('Connected');
     } else if (this._connectionState === 'auth-required') {
       statusColor = '#e5c07b';
-      statusText = 'Password Required';
+      statusText = vscode.l10n.t('Password required');
     } else {
       statusColor = '#e06c75';
-      statusText = 'Disconnected';
+      statusText = vscode.l10n.t('Disconnected');
     }
 
     const url = this.getConfiguredUrl();
@@ -927,29 +938,29 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       overlayContent = this.renderServerSelector();
     } else if (!url) {
       overlayContent =
-        '<span>No URL configured. Configure a server below.</span>' +
-        '<div class="btn-row"><button class="btn btn-default" onclick="selectServer()">Servers</button></div>';
+        `<span>${escapeAttr(vscode.l10n.t('No URL configured. Configure a server below.'))}</span>` +
+        `<div class="btn-row"><button class="btn btn-default" onclick="selectServer()">${escapeAttr(vscode.l10n.t('Servers'))}</button></div>`;
     } else {
       const card = this.renderCurrentServerCard();
       const statusHtml = this._isReconnecting ? (
-        '<span>Connection lost, reconnecting...</span>' +
-        '<div class="btn-row"><button class="btn btn-default" onclick="cancelReconnect()">Cancel</button>' +
-        '<button class="btn btn-outline" onclick="selectServer()">Servers</button></div>'
+        `<span>${escapeAttr(vscode.l10n.t('Connection lost, reconnecting...'))}</span>` +
+        `<div class="btn-row"><button class="btn btn-default" onclick="cancelReconnect()">${escapeAttr(vscode.l10n.t('Cancel'))}</button>` +
+        `<button class="btn btn-outline" onclick="selectServer()">${escapeAttr(vscode.l10n.t('Servers'))}</button></div>`
       ) : this._connectionState === 'checking' ? (
         '<div class="oc-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="40" height="40" fill="none"><path fill="#f1ecec" d="M180 60H60v180h120zm60 240H0V0h240z" clip-path="url(#b)" mask="url(#a)" transform="translate(30)"/><defs><clipPath id="b" clipPathUnits="userSpaceOnUse"><path fill="#fff" d="M0 0h240v300H0z"/></clipPath><mask id="a" maskUnits="userSpaceOnUse"><path fill="#fff" d="M240 0H0v300h240z"/></mask></defs></svg></div>' +
         '<div class="spinner"></div>' +
-        '<span>Connecting to server...</span>'
+        `<span>${escapeAttr(vscode.l10n.t('Connecting to server...'))}</span>`
       ) : this._connectionState === 'starting' ? (
         '<div class="spinner"></div>' +
-        '<span>Starting OpenCode server...</span>'
+        `<span>${escapeAttr(vscode.l10n.t('Starting OpenCode server...'))}</span>`
       ) : this._connectionState === 'auth-required' ? (
         '<div class="lock-icon">🔒</div>' +
-        '<span>Server is online but password protected</span>' +
-        '<div class="btn-row"><button class="btn btn-default" onclick="setPassword()">Login with Username &amp; Password</button></div>'
+        `<span>${escapeAttr(vscode.l10n.t('Server is online but password protected'))}</span>` +
+        `<div class="btn-row"><button class="btn btn-default" onclick="setPassword()">${escapeAttr(vscode.l10n.t('Login with Username & Password'))}</button></div>`
       ) : this._connectionState === 'disconnected' ? (
-        '<span>OpenCode server is not reachable</span>' +
-        '<div class="btn-row"><button class="btn btn-default" onclick="refresh()">Retry</button><button class="btn btn-default" onclick="selectServer()">Servers</button>' +
-        '<button class="btn btn-outline" onclick="openSettings()">Settings</button></div>'
+        `<span>${escapeAttr(vscode.l10n.t('OpenCode server is not reachable'))}</span>` +
+        `<div class="btn-row"><button class="btn btn-default" onclick="refresh()">${escapeAttr(vscode.l10n.t('Retry'))}</button><button class="btn btn-default" onclick="selectServer()">${escapeAttr(vscode.l10n.t('Servers'))}</button>` +
+        `<button class="btn btn-outline" onclick="openSettings()">${escapeAttr(vscode.l10n.t('Settings'))}</button></div>`
       ) : '';
 
       overlayContent = card
@@ -984,7 +995,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const overlayHidden = showIframe && !this._showServerSelector;
 
     const statusBarStop = this._startedByUs
-      ? '<a onclick="stopServer()">Stop</a><span class="separator">&nbsp;|&nbsp;</span>'
+      ? `<a onclick="stopServer()">${escapeAttr(vscode.l10n.t('Stop'))}</a><span class="separator">&nbsp;|&nbsp;</span>`
       : '';
 
     return { statusColor, statusText, statusBarStop, overlayContent, overlayHidden, showIframe, iframeUrl: themedIframeUrl };
@@ -1234,34 +1245,34 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
 
   private updateStatusBar(): void {
     if (this._connectionState === 'checking') {
-      this._statusBarItem.text = '$(globe) OpenCode: Checking...';
+      this._statusBarItem.text = '$(globe) ' + vscode.l10n.t('OpenCode: Checking...');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'Checking OpenCode server...';
+      this._statusBarItem.tooltip = vscode.l10n.t('Checking OpenCode server...');
       this._statusBarItem.show();
     } else if (this._connectionState === 'starting') {
-      this._statusBarItem.text = '$(globe) OpenCode: Starting...';
+      this._statusBarItem.text = '$(globe) ' + vscode.l10n.t('OpenCode: Starting...');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'Starting OpenCode server...';
+      this._statusBarItem.tooltip = vscode.l10n.t('Starting OpenCode server...');
       this._statusBarItem.show();
     } else if (this._isReconnecting) {
-      this._statusBarItem.text = '$(globe) OpenCode: Reconnecting...';
+      this._statusBarItem.text = '$(globe) ' + vscode.l10n.t('OpenCode: Reconnecting...');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'Attempting to reconnect to OpenCode server';
+      this._statusBarItem.tooltip = vscode.l10n.t('Attempting to reconnect to OpenCode server');
       this._statusBarItem.show();
     } else if (this._connectionState === 'connected') {
-      this._statusBarItem.text = '$(globe) OpenCode: Connected';
+      this._statusBarItem.text = '$(globe) ' + vscode.l10n.t('OpenCode: Connected');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'OpenCode server is reachable';
+      this._statusBarItem.tooltip = vscode.l10n.t('OpenCode server is reachable');
       this._statusBarItem.show();
     } else if (this._connectionState === 'auth-required') {
-      this._statusBarItem.text = '$(key) OpenCode: Password Required';
+      this._statusBarItem.text = '$(key) ' + vscode.l10n.t('OpenCode: Password Required');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'OpenCode server requires a password — click to open panel';
+      this._statusBarItem.tooltip = vscode.l10n.t('OpenCode server requires a password — click to open panel');
       this._statusBarItem.show();
     } else {
-      this._statusBarItem.text = '$(globe) OpenCode: Disconnected';
+      this._statusBarItem.text = '$(globe) ' + vscode.l10n.t('OpenCode: Disconnected');
       this._statusBarItem.backgroundColor = undefined;
-      this._statusBarItem.tooltip = 'OpenCode server is not reachable — click to open panel';
+      this._statusBarItem.tooltip = vscode.l10n.t('OpenCode server is not reachable — click to open panel');
       this._statusBarItem.show();
     }
   }
@@ -1575,7 +1586,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const hasPending = !!pending;
     const serverIdJs = escapeJsString(server.id);
     const serverIdAttr = escapeAttr(server.id);
-    const label = pending?.label ?? server.label ?? '';
+    const label = this.displayServerLabel(server, pending?.label);
     const url = pending?.url ?? server.url;
     const serverUsername = pending?.username ?? server.username ?? '';
     const authEnabled = pending?.authEnabled ?? server.authEnabled ?? false;
@@ -1602,42 +1613,42 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     let action: string;
     if (isLocal) {
       if (isActive) {
-        action = `<span class="badge badge-active">ACTIVE</span>`;
+        action = `<span class="badge badge-active">${escapeAttr(vscode.l10n.t('ACTIVE'))}</span>`;
       } else {
         action = `<div class="btn-row">
-          <button class="btn btn-outline btn-xs" onclick="startAndConnect('${serverIdJs}')">Start &amp; Connect</button>
-          <button class="btn btn-default btn-xs" onclick="connectToServer('${serverIdJs}')">Connect</button>
+          <button class="btn btn-outline btn-xs" onclick="startAndConnect('${serverIdJs}')">${escapeAttr(vscode.l10n.t('Start & Connect'))}</button>
+          <button class="btn btn-default btn-xs" onclick="connectToServer('${serverIdJs}')">${escapeAttr(vscode.l10n.t('Connect'))}</button>
         </div>`;
       }
     } else {
       if (isActive) {
-        action = `<span class="badge badge-active">ACTIVE</span>`;
+        action = `<span class="badge badge-active">${escapeAttr(vscode.l10n.t('ACTIVE'))}</span>`;
       } else {
-        action = `<button class="btn btn-default btn-xs" onclick="connectToServer('${serverIdJs}')">Connect</button>`;
+        action = `<button class="btn btn-default btn-xs" onclick="connectToServer('${serverIdJs}')">${escapeAttr(vscode.l10n.t('Connect'))}</button>`;
       }
     }
 
     let footerLeft = '';
     if (isDefault) {
-      footerLeft = `<span class="badge badge-outline">default</span>`;
+      footerLeft = `<span class="badge badge-outline">${escapeAttr(vscode.l10n.t('default'))}</span>`;
     } else {
-      footerLeft = `<button class="btn btn-ghost btn-xs" onclick="setDefaultServer('${serverIdJs}')">Set Default</button>`;
+      footerLeft = `<button class="btn btn-ghost btn-xs" onclick="setDefaultServer('${serverIdJs}')">${escapeAttr(vscode.l10n.t('Set Default'))}</button>`;
     }
 
     const trashSvg = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="pointer-events:none;display:block"><path d="M6.5 1.5H5V3h6V1.5H9.5L9 1H7L6.5 1.5zM3 4v1h1v9.5c0 .3.2.5.5.5h7c.3 0 .5-.2.5-.5V5h1V4H3zm2 1h6v9H5V5z"/></svg>';
     const saveSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="pointer-events:none;display:block"><path fill-rule="evenodd" clip-rule="evenodd" d="M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z"/></svg>';
     const saveBtn = hasPending
-      ? `<span class="btn btn-default btn-xs" onclick="commitServerChanges('${serverIdJs}')" title="Save changes" role="button" tabindex="0" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">SAVE ${saveSvg}</span>`
+      ? `<span class="btn btn-default btn-xs" onclick="commitServerChanges('${serverIdJs}')" title="${escapeAttr(vscode.l10n.t('Save changes'))}" role="button" tabindex="0" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">${escapeAttr(vscode.l10n.t('SAVE'))} ${saveSvg}</span>`
       : '';
 
-    const userPlaceholder = (usingEnv && !server.username) ? '[Using opencode]' : 'Username';
-    const passPlaceholder = usingEnv ? '[Using OPENCODE_SERVER_PASSWORD]' : hasPassword ? '••••••••' : 'Password';
+    const userPlaceholder = (usingEnv && !server.username) ? vscode.l10n.t('[Using opencode]') : vscode.l10n.t('Username');
+    const passPlaceholder = usingEnv ? vscode.l10n.t('[Using OPENCODE_SERVER_PASSWORD]') : hasPassword ? '••••••••' : vscode.l10n.t('Password');
     const authFieldsStyle = authEnabled ? '' : ' style="display:none"';
 
     return `<div class="card" data-id="${serverIdAttr}">
       <div class="card-header">
         <div class="card-title">
-          <input class="input-title" type="text" value="${escapeAttr(label)}" onchange="pendingChange('${serverIdJs}','label',this.value)" placeholder="Server name" spellcheck="false">
+          <input class="input-title" type="text" value="${escapeAttr(label)}" onchange="pendingChange('${serverIdJs}','label',this.value)" placeholder="${escapeAttr(vscode.l10n.t('Server name'))}" spellcheck="false">
           ${isActive ? `<span class="${statusClass}"></span>` : ''}
         </div>
         <div class="card-description">${urlValue}</div>
@@ -1652,11 +1663,11 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         <div class="toggle-row">
           <label class="switch-label">
             <input type="checkbox" class="switch-input" ${authEnabled ? 'checked' : ''} onchange="pendingChange('${serverIdJs}','authEnabled',this.checked)">
-            <span>authentication</span>
+            <span>${escapeAttr(vscode.l10n.t('authentication'))}</span>
           </label>
           <label class="switch-label">
             <input type="checkbox" class="switch-input" ${isWsl ? 'checked' : ''} onchange="pendingChange('${serverIdJs}','isWsl',this.checked)">
-            <span>is WSL / Linux</span>
+            <span>${escapeAttr(vscode.l10n.t('is WSL / Linux'))}</span>
           </label>
         </div>
       </div>
@@ -1664,7 +1675,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         ${footerLeft}
         <div style="flex:1"></div>
         ${saveBtn}
-        ${isLocal ? '' : `<span class="btn btn-ghost btn-xs" onclick="removeServer('${serverIdJs}')" title="Remove server" role="button" tabindex="0" style="cursor:pointer">${trashSvg}</span>`}
+        ${isLocal ? '' : `<span class="btn btn-ghost btn-xs" onclick="removeServer('${serverIdJs}')" title="${escapeAttr(vscode.l10n.t('Remove server'))}" role="button" tabindex="0" style="cursor:pointer">${trashSvg}</span>`}
       </div>
     </div>`;
   }
@@ -1715,7 +1726,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const sidebarTheme = this.getSidebarThemePreference();
 
     return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeAttr(vscode.env.language || 'en')}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1950,11 +1961,11 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     <span id="statusText">${statusText}</span>
     <span class="spacer"></span>
     <span id="statusBarActions">${statusBarStop}</span>
-    <a onclick="refresh()">Refresh</a>
+    <a onclick="refresh()">${escapeAttr(vscode.l10n.t('Refresh'))}</a>
     <span class="separator">&nbsp;|&nbsp;</span>
-    <a onclick="selectServer()">Servers</a>
+    <a onclick="selectServer()">${escapeAttr(vscode.l10n.t('Servers'))}</a>
     <span class="separator">&nbsp;|&nbsp;</span>
-    <a onclick="closePanel()">Close</a>
+    <a onclick="closePanel()">${escapeAttr(vscode.l10n.t('Close'))}</a>
   </div>
 
   <iframe id="ocFrame" onload="sendWorkspace(); syncTheme()" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -2159,17 +2170,17 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const localHtml = localServer ? this.renderServerRow(localServer, true) : '';
 
     const regularSection = regularHtml || regularServers.length > 0
-      ? `<div class="section-title" style="margin-top:8px">Servers</div>${regularHtml}` : '';
+      ? `<div class="section-title" style="margin-top:8px">${escapeAttr(vscode.l10n.t('Servers'))}</div>${regularHtml}` : '';
 
     return `<div class="server-selector">
-      <button class="btn btn-ghost btn-xs" onclick="selectServer()" style="margin-bottom:4px;flex-shrink:0">&larr; Back</button>
+      <button class="btn btn-ghost btn-xs" onclick="selectServer()" style="margin-bottom:4px;flex-shrink:0">${escapeAttr(vscode.l10n.t('← Back'))}</button>
       ${regularSection}
       <div class="local-section">
-        <div class="section-title">Local Server</div>
-        ${localHtml || '<span style="font-size:12px;opacity:.5">No local server configured</span>'}
+        <div class="section-title">${escapeAttr(vscode.l10n.t('Local Server'))}</div>
+        ${localHtml || `<span style="font-size:12px;opacity:.5">${escapeAttr(vscode.l10n.t('No local server configured'))}</span>`}
       </div>
       <div class="btn-row" style="justify-content:center;margin-top:4px">
-        <button class="btn btn-outline" style="height:32px;padding:0 16px;border-radius:8px" onclick="addServer()">+ Add Server</button>
+        <button class="btn btn-outline" style="height:32px;padding:0 16px;border-radius:8px" onclick="addServer()">${escapeAttr(vscode.l10n.t('+ Add Server'))}</button>
       </div>
     </div>`;
   }

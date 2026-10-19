@@ -10,8 +10,13 @@ let resolveExternal: (uri: unknown) => Promise<{ toString(): string }>;
 let disposals = 0;
 loader._load = function(name, ...args) {
   if (name === 'vscode') return {
-    env: { remoteName: 'ssh-remote', asExternalUri: (uri: unknown) => resolveExternal(uri) },
+    env: { remoteName: 'ssh-remote', language: 'en', asExternalUri: (uri: unknown) => resolveExternal(uri) },
     Uri: { parse: (value: string) => value },
+    l10n: {
+      t: (message: string, ...args: Array<string | number | boolean>) =>
+        message.replace(/\{(\d+)\}/g, (placeholder, index) =>
+          index < args.length ? String(args[Number(index)]) : placeholder),
+    },
   };
   if (name === './ProxyServer') return {
     getOrCreateProxy: async () => ({ port: 4109, dispose: async () => { disposals++; } }),

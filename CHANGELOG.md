@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.3 — 2026-10-19
+
+- Localized the extension's runtime UI through the official `vscode.l10n` API:
+  panel status bar and overlays, connection states, server selector and editor,
+  badges/buttons/tooltips, native status bar item and tooltips, password
+  prompts, confirmation dialogs, notifications and proxy error pages.
+- Added `l10n/bundle.l10n.json` + `l10n/bundle.l10n.zh-cn.json` (63 strings) and
+  `scripts/verify-l10n.cjs`, which keeps both bundles in sync with the source.
+
 ## 0.22.2 — 2026-10-19
 
 - Added Simplified Chinese (`zh-cn`) localization for every contributed

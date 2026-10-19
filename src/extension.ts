@@ -46,14 +46,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('opencode-web-sidebar.setPassword', async () => {
       const username = await vscode.window.showInputBox({
-        prompt: 'Enter username for the OpenCode server',
+        prompt: vscode.l10n.t('Enter username for the OpenCode server'),
         value: panel!.cachedUsername || 'opencode',
         ignoreFocusOut: true,
       });
       if (username === undefined) {return;}
 
       const password = await vscode.window.showInputBox({
-        prompt: 'Enter password for the OpenCode server',
+        prompt: vscode.l10n.t('Enter password for the OpenCode server'),
         password: true,
         ignoreFocusOut: true,
       });
@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       await panel!.saveCredentials(username || 'opencode', password);
       panel!.render();
-      vscode.window.showInformationMessage('OpenCode credentials saved.');
+      vscode.window.showInformationMessage(vscode.l10n.t('OpenCode credentials saved.'));
     })
   );
 
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('opencode-web-sidebar.clearPassword', async () => {
       await panel!.clearCredentials();
       panel!.render();
-      vscode.window.showInformationMessage('OpenCode credentials cleared.');
+      vscode.window.showInformationMessage(vscode.l10n.t('OpenCode credentials cleared.'));
     })
   );
 

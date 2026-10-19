@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
 import * as fs from 'fs';
@@ -518,7 +519,7 @@ function sendInjectedHtml(
   proxyRes.on('error', err => {
     if (!res.headersSent) {
       res.writeHead(502, { 'content-type': 'text/plain' });
-      res.end(`Bad Gateway: ${err.message}`);
+      res.end(vscode.l10n.t('Bad Gateway: {0}', err.message));
     }
   });
 }
@@ -550,7 +551,7 @@ function createRequestHandler(targetUrl: string, auth: string | null): http.Requ
     proxyReq.on('error', (err) => {
       if (!res.headersSent) {
         res.writeHead(502, { 'content-type': 'text/plain' });
-        res.end(`Bad Gateway: ${err.message}`);
+        res.end(vscode.l10n.t('Bad Gateway: {0}', err.message));
       }
     });
 
@@ -558,7 +559,7 @@ function createRequestHandler(targetUrl: string, auth: string | null): http.Requ
       proxyReq.destroy();
       if (!res.headersSent) {
         res.writeHead(504, { 'content-type': 'text/plain' });
-        res.end('Gateway Timeout');
+        res.end(vscode.l10n.t('Gateway Timeout'));
       }
     });
 

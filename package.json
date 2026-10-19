@@ -2,7 +2,7 @@
   "name": "opencode-web-sidebar",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.22.2",
+  "version": "0.22.3",
   "license": "MIT",
   "publisher": "ryjs",
   "author": {
@@ -33,6 +33,7 @@
     "onCommand:opencode-web-sidebar.stopServer"
   ],
   "main": "./out/extension.js",
+  "l10n": "./l10n",
   "contributes": {
     "viewsContainers": {
       "secondarySidebar": [
@@ -263,6 +264,7 @@
     "pretest": "npm run compile && npm run lint",
     "test": "node --test out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js out/OpenCodePanel.test.js out/SidebarTheme.test.js",
     "verify:nls": "node scripts/verify-nls.cjs",
+    "verify:l10n": "node scripts/verify-l10n.cjs",
     "publish:marketplace": "vsce package && vsce publish",
     "publish:openvsx": "bash -c \"read -p 'Enter packaged filename: ' filename && read -sp 'Enter openvsx token: ' token && echo && npx ovsx publish \\\"$filename\\\" -p \\\"$token\\\"\"",
     "publish": "npm version minor --no-git-tag-version && npm run publish:marketplace && npm run publish:openvsx"
