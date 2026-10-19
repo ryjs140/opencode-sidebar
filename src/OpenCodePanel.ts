@@ -112,7 +112,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   private _workspaceFolder = '';
   private _iframeNeedsNavigation = false;
   private _iframeWasConnected = false;
-  private _themePreference: SidebarThemePreference = 'beige';
+  private _themePreference: SidebarThemePreference = 'codex';
 
   private readonly _passwordsCache = new Map<string, string>();
 
@@ -757,7 +757,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
 
   private getSidebarThemePreference(): SidebarThemePreference {
     try {
-      const value = vscode.workspace.getConfiguration('opencode-web-sidebar').get<unknown>('theme', 'beige');
+      const value = vscode.workspace.getConfiguration('opencode-web-sidebar').get<unknown>('theme', 'codex');
       this._themePreference = normalizeSidebarTheme(value);
       return this._themePreference;
     } catch {
@@ -2010,7 +2010,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
           iframe.style.display = msg.showIframe ? 'block' : 'none';
         }
       } else if (msg.type === 'sidebarThemeChanged') {
-        __sidebarTheme = msg.theme === 'native' ? 'native' : 'beige';
+        __sidebarTheme = msg.theme === 'codex' || msg.theme === 'vscode' || msg.theme === 'native' ? msg.theme : 'codex';
         syncTheme();
       } else if (msg.type === 'ocFrameUrlChanged') {
         const frame = document.getElementById('ocFrame');
@@ -2093,22 +2093,59 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       }
     }
 
+    // VS Code injects its color theme as --vscode-* custom properties into the
+    // webview document; the iframe cannot see them (separate document), so we
+    // forward a small snapshot and let the injected script resolve tokens.
+    const VSCODE_COLOR_VARS = [
+      'sideBar-background', 'editor-background', 'foreground', 'descriptionForeground',
+      'icon-foreground', 'input-background', 'input-placeholderForeground', 'focusBorder',
+      'sideBarSectionHeader-background', 'menu-background', 'editorWidget-background',
+      'list-hoverBackground', 'list-activeSelectionBackground', 'button-background',
+      'button-foreground', 'button-secondaryBackground', 'badge-background', 'badge-foreground',
+      'textLink-foreground', 'textLink-activeForeground'
+    ];
+
+    function readVscodeColors() {
+      const colors = {};
+      try {
+        const targets = [getComputedStyle(document.documentElement)];
+        if (document.body) { targets.push(getComputedStyle(document.body)); }
+        for (const name of VSCODE_COLOR_VARS) {
+          for (const style of targets) {
+            const value = style.getPropertyValue('--vscode-' + name).trim();
+            if (value) { colors[name] = value; break; }
+          }
+        }
+      } catch (error) {
+        // Leave the snapshot empty; the page keeps the static fallback palette.
+      }
+      return colors;
+    }
+
     function syncTheme() {
       const classes = document.body.className;
       const dark = classes.includes('vscode-dark') || classes.includes('vscode-high-contrast');
       const mode = dark && !classes.includes('vscode-high-contrast-light') ? 'dark' : 'light';
       const iframe = document.getElementById('ocFrame');
       if (iframe && iframe.contentWindow && iframe.src) {
-        iframe.contentWindow.postMessage(
-          { type: 'ocSidebarTheme', theme: __sidebarTheme, mode, source: 'vscode' },
-          new URL(iframe.src).origin
-        );
+        const payload = { type: 'ocSidebarTheme', theme: __sidebarTheme, mode, source: 'vscode' };
+        if (__sidebarTheme === 'vscode') { payload.colors = readVscodeColors(); }
+        iframe.contentWindow.postMessage(payload, new URL(iframe.src).origin);
       }
     }
 
+    let __syncQueued = false;
+    function queueSyncTheme() {
+      if (__syncQueued) { return; }
+      __syncQueued = true;
+      setTimeout(() => { __syncQueued = false; syncTheme(); }, 50);
+    }
+
     syncTheme();
-    const obs = new MutationObserver(syncTheme);
+    const obs = new MutationObserver(queueSyncTheme);
     obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-vscode-theme-kind', 'data-vscode-theme-id'] });
+    obs.observe(document.head, { childList: true, subtree: true, characterData: true });
   </script>
 </body>
 </html>`;

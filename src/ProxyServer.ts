@@ -21,7 +21,7 @@ const PORT_MIN = 4097;
 const PORT_MAX = 5002;
 // Changing proxy semantics requires a distinct shared-proxy key so an updated
 // extension never reconnects to an older VS Code process still hosting it.
-const PROXY_FEATURE_KEY = 'web-sidebar-injection-v8';
+const PROXY_FEATURE_KEY = 'web-sidebar-injection-v9';
 
 const LOCK_DIR = path.join(STATE_DIR, 'proxy-state.lock');
 const LOCK_STALE_MS = 5000;

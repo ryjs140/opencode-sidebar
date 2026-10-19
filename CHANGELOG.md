@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.22.1 — 2026-10-19
+
+Visual alignment with the Codex sidebar (no functional changes; OpenCode itself
+is still untouched).
+
+- Reworked the themed look: one unified beige page (`#F2F1EA`), a white
+  composer (`#FFFFFF`), neutral text (`#292929` / `#656563`), light auxiliary
+  tone (`#ECEBE4`) and matching warm dark variants. Draft/session cards no
+  longer paint a second cream surface, and user-message bubbles use the
+  auxiliary tone instead of blue.
+- Added the **vscode** theme mode: follows the active VS Code color theme by
+  reading the webview's live `--vscode-*` colors, applies changes live without
+  a reload, and falls back to the Codex palette for values a theme does not
+  define or when a color is malformed.
+- **beige** is now a deprecated alias for the new default **codex**; existing
+  settings keep working and unknown values fall back instead of erroring.
+- The composer/input surface is pinned to the input tone explicitly, so the
+  white input stays white on the beige page.
+- Legacy `beige` theme hints are normalized to `codex` before they reach the
+  iframe URL, and the proxy feature key is bumped to
+  `web-sidebar-injection-v9` so open windows reconnect to the new payload.
+
 ## 0.22.0 — 2026-10-19
 
 Theme release for the personal fork.
