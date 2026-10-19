@@ -2,16 +2,19 @@
   "name": "opencode-web-sidebar",
   "displayName": "OpenCode Sidebar GUI",
   "description": "OpenCode web-UI in the sidebar panel - connects to your web server or starts a new one, adds narrow UI adaptations, multi-server management...",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "license": "MIT",
-  "publisher": "bmpenuelas",
-  "homepage": "https://github.com/bmpenuelas/opencode-web-sidebar",
+  "publisher": "ryjs",
+  "author": {
+    "name": "ryjs"
+  },
+  "homepage": "https://github.com/ryjs140/opencode-sidebar",
   "bugs": {
-    "email": "bmpenuelas@gmail.com"
+    "url": "https://github.com/ryjs140/opencode-sidebar/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bmpenuelas/opencode-web-sidebar.git"
+    "url": "https://github.com/ryjs140/opencode-sidebar.git"
   },
   "engines": {
     "vscode": "^1.106.0"
@@ -208,6 +211,23 @@
           "default": 0,
           "description": "Maximum number of reconnection attempts (0 = unlimited)"
         },
+        "opencode-web-sidebar.theme": {
+          "type": "string",
+          "default": "beige",
+          "enum": [
+            "beige",
+            "native"
+          ],
+          "enumItemLabels": [
+            "Beige (match gfy VS Code theme)",
+            "OpenCode native theme"
+          ],
+          "enumDescriptions": [
+            "Apply the warm beige palette from the ryjs.gfy-theme VS Code theme inside the embedded OpenCode page, including a warm dark variant when VS Code is dark.",
+            "Leave OpenCode's own theme and color scheme untouched."
+          ],
+          "description": "Theme applied inside the embedded OpenCode web UI."
+        },
         "opencode-web-sidebar.serverCommand": {
           "type": "string",
           "default": "opencode web --port 4096",
@@ -235,7 +255,7 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",
     "pretest": "npm run compile && npm run lint",
-    "test": "node --test out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js",
+    "test": "node --test out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js out/OpenCodePanel.test.js out/SidebarTheme.test.js",
     "publish:marketplace": "vsce package && vsce publish",
     "publish:openvsx": "bash -c \"read -p 'Enter packaged filename: ' filename && read -sp 'Enter openvsx token: ' token && echo && npx ovsx publish \\\"$filename\\\" -p \\\"$token\\\"\"",
     "publish": "npm version minor --no-git-tag-version && npm run publish:marketplace && npm run publish:openvsx"

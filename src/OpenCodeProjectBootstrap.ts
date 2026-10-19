@@ -80,3 +80,66 @@ export const OPENCODE_PROJECT_BOOTSTRAP_SCRIPT = `<script>
   }catch(e){}
 })();
 </script>`;
+
+/** V2.0.x web persistence contract, verified against OpenCode v2.0.31.
+ * Runs before the app: register the project and a real DraftTab, then select its
+ * supported route. Existing tabs and draft contents are preserved.
+ */
+export const OPENCODE_V2_BOOTSTRAP_SCRIPT = `<script>
+(function(){
+  var url=new URL(window.location.href);
+  if(!url.searchParams.has('_ocWorkspace')&&!url.searchParams.has('_ocRestore'))return;
+  var directory=url.searchParams.get('_ocWorkspace')||'';
+  var restore=url.searchParams.get('_ocRestore')||'';
+  var target='/';
+  function read(key,fallback){
+    var raw=localStorage.getItem(key);
+    return raw?JSON.parse(raw):fallback;
+  }
+  function encode(value){
+    var bytes=new TextEncoder().encode(value),binary='';
+    for(var i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
+  }
+  try{
+    var origin=url.origin;
+    var state=read('opencode.global.dat:server',{});
+    if(!state||typeof state!=='object'||Array.isArray(state))throw new Error('Invalid server state');
+    if(directory){
+      state.projects=state.projects||{};
+      var projects=state.projects.local||[];
+      if(!projects.some(function(p){return p.worktree===directory})){
+        state.projects.local=[{worktree:directory,expanded:true}].concat(projects);
+      }
+      state.lastProject=state.lastProject||{};
+      state.lastProject.local=directory;
+      if(state.recentlyClosed&&Array.isArray(state.recentlyClosed.local)){
+        state.recentlyClosed.local=state.recentlyClosed.local.filter(function(p){return p!==directory});
+      }
+      localStorage.setItem('opencode.global.dat:server',JSON.stringify(state));
+    }
+    var tabs=read('opencode.window.browser.dat:tabs',[]);
+    if(!Array.isArray(tabs))throw new Error('Invalid tabs');
+    var session=/^\\/server\\/([^/]+)\\/session\\/([^/?#]+)(?:[?#].*)?$/.exec(restore);
+    if(session&&session[1]===encode(origin)){
+      target=restore;
+      if(!tabs.some(function(t){return t.type==='session'&&t.server===origin&&(t.sessionId===session[2]||t.routeSessionId===session[2])})){
+        tabs.push({type:'session',server:origin,sessionId:session[2]});
+      }
+    }else if(directory&&(!restore||restore.indexOf('/new-session?')===0)){
+      var draftID=new URL(restore||'/new-session',origin).searchParams.get('draftId')||crypto.randomUUID();
+      if(!tabs.some(function(t){return t.type==='draft'&&t.draftID===draftID})){
+        tabs.push({type:'draft',draftID:draftID,server:origin,directory:directory});
+      }
+      target='/new-session?draftId='+encodeURIComponent(draftID);
+    }else if(restore==='/'||restore==='/settings'){
+      target=restore;
+    }
+    localStorage.setItem('opencode.window.browser.dat:tabs',JSON.stringify(tabs));
+  }catch(e){
+    // Storage unavailable or an unsupported state: let the official home load.
+    target='/';
+  }
+  history.replaceState(null,'',target);
+})();
+</script>`;

@@ -4,6 +4,8 @@ import {
   decideTrackedIframePath,
   encodeOpenCodeRouteSegment,
   getWorkspaceSessionPath,
+  rebaseSessionPath,
+  isV2AppPath,
 } from './WorkspaceNavigation';
 
 test('encodes OpenCode route segments as unpadded Base64URL', () => {
@@ -55,4 +57,31 @@ test('tracks ordinary navigation after workspace launch completes', () => {
 test('rejects absolute and protocol-relative iframe paths', () => {
   strictEqual(decideTrackedIframePath('https://example.com/', false, '').accept, false);
   strictEqual(decideTrackedIframePath('//example.com/', false, '').accept, false);
+});
+
+test('V2 launches through home with a lossless space-containing directory and restore path', () => {
+  const directory = '/home/gfy/software/Traffic monitor';
+  const restore = '/new-session?draftId=draft_123';
+  const url = new URL(getWorkspaceSessionPath(directory, true, restore), 'http://localhost');
+  strictEqual(url.pathname, '/');
+  strictEqual(url.searchParams.get('_ocWorkspace'), directory);
+  strictEqual(url.searchParams.get('_ocRestore'), restore);
+});
+
+test('rebinds only the current server session across dynamic proxy ports', () => {
+  const oldOrigin = 'http://127.0.0.1:4097';
+  const newOrigin = 'https://forwarded.example:4100';
+  const path = `/server/${encodeOpenCodeRouteSegment(oldOrigin)}/session/ses_123`;
+  strictEqual(rebaseSessionPath(path, oldOrigin, newOrigin),
+    `/server/${encodeOpenCodeRouteSegment(newOrigin)}/session/ses_123`);
+  strictEqual(rebaseSessionPath(path, 'http://other-server', newOrigin), path);
+});
+
+test('V2 route validation rejects old, malformed and external addresses', () => {
+  for (const path of ['/encoded/session', '/server/!!!/session/ses_123', '//evil.test/', '/\\evil.test/']) {
+    strictEqual(isV2AppPath(path), false, path);
+  }
+  for (const path of ['/', '/settings', '/new-session?draftId=abc', '/server/aHR0cDovL2xvY2FsaG9zdDo0MDk2/session/ses_123']) {
+    strictEqual(isV2AppPath(path), true, path);
+  }
 });

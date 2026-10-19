@@ -10,3 +10,5 @@ src/**
 out/**/*.test.js
 **/.vscode-test.*
 node_modules/**
+
+scripts/**

@@ -96,6 +96,9 @@ export function activate(context: vscode.ExtensionContext) {
         e.affectsConfiguration('opencode-web-sidebar.servers')) {
       panel?.onUrlChanged();
     }
+    if (e.affectsConfiguration('opencode-web-sidebar.theme')) {
+      panel?.onThemeChanged();
+    }
   });
 
   const hasFolder = !!(vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0);

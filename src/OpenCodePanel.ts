@@ -4,11 +4,20 @@ import { getOrCreateProxy } from './ProxyServer';
 import {
   decideTrackedIframePath,
   getWorkspaceSessionPath,
+  isV2AppPath,
+  rebaseSessionPath,
 } from './WorkspaceNavigation';
+import {
+  normalizeSidebarTheme,
+  withSidebarTheme,
+  type SidebarThemeMode,
+  type SidebarThemePreference,
+} from './SidebarTheme';
 
 const HEALTH_CHECK_TIMEOUT_MS = 3000;
 const PROXY_START_TIMEOUT_MS = 4000;
-const CONNECTION_RECHECK_TIMEOUT_MS = 6000;
+const PROXY_URI_TIMEOUT_MS = 15000;
+const CONNECTION_RECHECK_TIMEOUT_MS = 30000;
 
 function escapeAttr(text: string): string {
   return text
@@ -93,11 +102,17 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   private _consecutiveHealthFailures = 0;
   private _consecutiveAuthRequired = 0;
   private _savedIframePath = '';
+  private _webUiV2: boolean | undefined;
+  private _webUiServerUrl = '';
+  private _proxyReady = false;
+  private _proxyStarting: Promise<boolean> | undefined;
+  private _proxyStartingKey = '';
   private _workspaceLaunchPath = '';
   private _workspaceLaunchPending = false;
   private _workspaceFolder = '';
   private _iframeNeedsNavigation = false;
   private _iframeWasConnected = false;
+  private _themePreference: SidebarThemePreference = 'beige';
 
   private readonly _passwordsCache = new Map<string, string>();
 
@@ -662,7 +677,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         // A refresh only needs to re-check the upstream and reload the iframe.
         // Restarting a healthy proxy here can block while Node waits for the
         // iframe's long-lived HTTP/WebSocket connections to close.
-        if (!this._proxyPort && !this._proxyBaseUrl) {
+        if (!this._proxyReady) {
           const proxyReady = await this.startProxy();
           if (!proxyReady) {
             return 'disconnected';
@@ -740,6 +755,42 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     return active ? active.url : '';
   }
 
+  private getSidebarThemePreference(): SidebarThemePreference {
+    try {
+      const value = vscode.workspace.getConfiguration('opencode-web-sidebar').get<unknown>('theme', 'beige');
+      this._themePreference = normalizeSidebarTheme(value);
+      return this._themePreference;
+    } catch {
+      // Unit tests instantiate panel methods without an extension host.
+      return normalizeSidebarTheme(this._themePreference);
+    }
+  }
+
+  private getWindowThemeMode(): SidebarThemeMode {
+    try {
+      const window = (vscode as unknown as { window?: typeof vscode.window }).window;
+      const kind = window?.activeColorTheme?.kind;
+      return kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast
+        ? 'dark'
+        : 'light';
+    } catch {
+      return 'light';
+    }
+  }
+
+  /**
+   * The webview observes VS Code body-class changes itself; this method only
+   * tells it which palette preference to forward to the iframe.
+   */
+  onThemeChanged(): void {
+    const theme = this.getSidebarThemePreference();
+    if (!this._view) {
+      return;
+    }
+    this.log(`Theme preference changed: ${theme}`);
+    this._view.webview.postMessage({ type: 'sidebarThemeChanged', theme });
+  }
+
   private getServerCommand(): string {
     const active = this.getActiveServer();
     if (active?.serverCommand) return active.serverCommand;
@@ -783,14 +834,43 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     this._workspaceFolder = workspaceFolder;
     this._workspaceLaunchPath = getWorkspaceSessionPath(workspaceFolder);
     this._workspaceLaunchPending = !!this._workspaceLaunchPath;
-    this._savedIframePath = '';
+    this._savedIframePath = this._globalState.get<string>(this.navigationStateKey(), '');
+    if (this._webUiServerUrl !== this.getConfiguredUrl()) {
+      this._webUiV2 = undefined;
+      this._webUiServerUrl = this.getConfiguredUrl();
+    }
+    if (this._savedIframePath) this._workspaceLaunchPending = false;
     this._iframeNeedsNavigation = true;
     this._iframeWasConnected = false;
-    this.log(`Prepared workspace navigation: ${this._workspaceLaunchPath || '/'}`);
+    this.log(`Prepared workspace navigation: ${this._webUiV2 === undefined ? '(awaiting web UI detection)' : this._webUiV2 ? getWorkspaceSessionPath(workspaceFolder, true) : this._workspaceLaunchPath || '/'}`);
     return true;
   }
 
+  private navigationStateKey(): string {
+    return 'opencode-web-sidebar.navigation.' + JSON.stringify([
+      this._activeServerId, this.getConfiguredUrl(), this._workspaceFolder,
+    ]);
+  }
+
   private trackIframePath(path: string): void {
+    if (typeof path !== 'string') return;
+    if (this._webUiV2) {
+      // Bootstrap parameters are transient, never a resumable app address.
+      if (/[?&]_oc(?:Workspace|Restore)=/.test(path)) return;
+      if (!isV2AppPath(path)) {
+        this._savedIframePath = '/';
+        this._workspaceLaunchPending = false;
+        void this._globalState.update(this.navigationStateKey(), '/');
+        this._iframeNeedsNavigation = true;
+        this.safeSendStateUpdate();
+        return;
+      }
+      this._workspaceLaunchPending = false;
+      this._savedIframePath = rebaseSessionPath(path,
+        this.getUrlOrigin(this._proxyBaseUrl || ''), this.getUrlOrigin(this.getConfiguredUrl()));
+      void this._globalState.update(this.navigationStateKey(), this._savedIframePath);
+      return;
+    }
     const decision = decideTrackedIframePath(
       path,
       this._workspaceLaunchPending,
@@ -803,6 +883,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       return;
     }
     this._savedIframePath = path;
+    void this._globalState.update(this.navigationStateKey(), path);
     if (decision.completesWorkspaceLaunch) {
       this._workspaceLaunchPending = false;
       this.log(`Workspace navigation completed: ${path}`);
@@ -867,7 +948,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         '<div class="btn-row"><button class="btn btn-default" onclick="setPassword()">Login with Username &amp; Password</button></div>'
       ) : this._connectionState === 'disconnected' ? (
         '<span>OpenCode server is not reachable</span>' +
-        '<div class="btn-row"><button class="btn btn-default" onclick="selectServer()">Servers</button>' +
+        '<div class="btn-row"><button class="btn btn-default" onclick="refresh()">Retry</button><button class="btn btn-default" onclick="selectServer()">Servers</button>' +
         '<button class="btn btn-outline" onclick="openSettings()">Settings</button></div>'
       ) : '';
 
@@ -879,25 +960,34 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         : statusHtml;
     }
 
-    const proxyUrl = this._proxyBaseUrl || (this._proxyPort
+    const proxyUrl = !this._proxyReady ? '' : this._proxyBaseUrl || (this._proxyPort
       ? `http://127.0.0.1:${this._proxyPort}`
       : '');
-    const iframePath = this._workspaceLaunchPending
+    const iframePath = this._webUiV2
+      ? getWorkspaceSessionPath(this._workspaceFolder, true,
+        rebaseSessionPath(this._savedIframePath,
+          this.getUrlOrigin(this.getConfiguredUrl()), this.getUrlOrigin(proxyUrl || '')))
+      : this._workspaceLaunchPending
       ? this._workspaceLaunchPath
       : this._savedIframePath || this._workspaceLaunchPath;
     const iframeUrl = proxyUrl ? proxyUrl + iframePath : '';
-    const connectedAndReady = !this._isReconnecting && this._connectionState === 'connected' && !!iframeUrl && !this._showServerSelector;
+    const themedIframeUrl = withSidebarTheme(
+      iframeUrl,
+      this.getSidebarThemePreference(),
+      this.getWindowThemeMode(),
+    );
+    const connectedAndReady = !this._isReconnecting && this._connectionState === 'connected' && !!themedIframeUrl && !this._showServerSelector;
     if (connectedAndReady) {
       this._iframeWasConnected = true;
     }
-    const showIframe = this._iframeWasConnected && !!iframeUrl && !this._showServerSelector;
+    const showIframe = this._iframeWasConnected && !!themedIframeUrl && !this._showServerSelector;
     const overlayHidden = showIframe && !this._showServerSelector;
 
     const statusBarStop = this._startedByUs
       ? '<a onclick="stopServer()">Stop</a><span class="separator">&nbsp;|&nbsp;</span>'
       : '';
 
-    return { statusColor, statusText, statusBarStop, overlayContent, overlayHidden, showIframe, iframeUrl };
+    return { statusColor, statusText, statusBarStop, overlayContent, overlayHidden, showIframe, iframeUrl: themedIframeUrl };
   }
 
   private safeSendStateUpdate(options: { reloadIframe?: boolean } = {}): void {
@@ -934,9 +1024,22 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     this.safeSendStateUpdate();
   }
 
-  private async startProxy(): Promise<boolean> {
+  private startProxy(): Promise<boolean> {
+    const key = JSON.stringify([this.getConfiguredUrl(), this._cachedUsername, this._cachedPassword]);
+    if (this._proxyStarting && key === this._proxyStartingKey) return this._proxyStarting;
+    this._proxyStartingKey = key;
+    const operation = this.startProxyOperation();
+    this._proxyStarting = operation;
+    void operation.finally(() => {
+      if (this._proxyStarting === operation) this._proxyStarting = undefined;
+    });
+    return operation;
+  }
+
+  private async startProxyOperation(): Promise<boolean> {
     const opId = ++this._proxyOperationId;
     await this.stopProxy(false);
+    if (opId !== this._proxyOperationId || this._disposed) return false;
     const url = this.getConfiguredUrl();
     if (!url) {
       this.log('No URL configured, skipping proxy');
@@ -950,7 +1053,13 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       }
       const targetUrl = parsed.toString();
       this.log(`Starting proxy for ${parsed.host}${this._cachedPassword ? ' (with auth)' : ' (no auth)'}`);
-      const handle = await withTimeout(getOrCreateProxy(targetUrl), PROXY_START_TIMEOUT_MS, 'proxy startup');
+      const pending = getOrCreateProxy(targetUrl);
+      let expired = false;
+      void pending.then(handle => {
+        if (expired) void handle.dispose();
+      }, () => {});
+      const handle = await withTimeout(pending, PROXY_START_TIMEOUT_MS, 'proxy startup')
+        .catch(err => { expired = true; throw err; });
       if (opId !== this._proxyOperationId || this._disposed) {
         await handle.dispose();
         return false;
@@ -959,40 +1068,41 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       this._proxyDispose = handle.dispose;
       this._iframeNeedsNavigation = true;
       this.log(`Proxy listening on port ${this._proxyPort}`);
-      this._proxyBaseUrl = await withTimeout(this.resolveProxyBaseUrl(), PROXY_START_TIMEOUT_MS, 'proxy URI resolution');
+      const baseUrl = await withTimeout(this.resolveProxyBaseUrl(handle.port), PROXY_URI_TIMEOUT_MS, 'proxy URI resolution');
+      if (opId !== this._proxyOperationId || this._disposed) return false;
+      this._proxyBaseUrl = baseUrl;
+      this._proxyReady = true;
       return true;
     } catch (err) {
       this.log(`Failed to start proxy: ${err}`);
+      if (opId === this._proxyOperationId) await this.stopProxy();
       return false;
     }
   }
 
-  private async resolveProxyBaseUrl(): Promise<string | undefined> {
-    try {
-      if (this._proxyPort && vscode.env.remoteName) {
-        const uri = vscode.Uri.parse(`http://127.0.0.1:${this._proxyPort}`);
-        const external = await vscode.env.asExternalUri(uri);
-        const result = external.toString().replace(/\/$/, '');
-        this.log(`Resolved proxy URL (remote=${vscode.env.remoteName}): ${result}`);
-        return result;
-      }
-    } catch (err) {
-      this.log(`Failed to resolve proxy external URL: ${err}`);
-    }
-    return undefined;
+  private async resolveProxyBaseUrl(port: number): Promise<string> {
+    const local = `http://127.0.0.1:${port}`;
+    if (!vscode.env.remoteName) return local;
+    const external = await vscode.env.asExternalUri(vscode.Uri.parse(local));
+    const result = external.toString().replace(/\/$/, '');
+    this.log(`Resolved proxy URL (remote=${vscode.env.remoteName}): ${result}`);
+    return result;
   }
 
   private async stopProxy(invalidateInFlight = true): Promise<void> {
+    this._proxyReady = false;
     if (invalidateInFlight) {
+      this._proxyStarting = undefined;
       this._proxyOperationId++;
     }
-    if (this._proxyDispose) {
-      this.log('Stopping proxy');
-      await this._proxyDispose();
-      this._proxyDispose = undefined;
-    }
+    const dispose = this._proxyDispose;
+    this._proxyDispose = undefined;
     this._proxyPort = undefined;
     this._proxyBaseUrl = undefined;
+    if (dispose) {
+      this.log('Stopping proxy');
+      await dispose();
+    }
   }
 
   private async restartProxy(): Promise<void> {
@@ -1007,7 +1117,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
 
     const state = await this.checkHealth();
     if (state === 'connected' || state === 'auth-required') {
-      if (state === 'connected' && !this._proxyPort && !this._proxyBaseUrl) {
+      if (state === 'connected' && !this._proxyReady) {
         const proxyReady = await this.startProxy();
         if (!proxyReady) {
           this._connectionState = 'disconnected';
@@ -1209,7 +1319,42 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const url = this.getHealthUrl();
     if (!url) { return 'disconnected'; }
 
+    const generation = this._serverGeneration;
+    const navigationKey = this.navigationStateKey();
     try {
+      if (this._webUiV2 !== false) {
+        const infoUrl = this.getConfiguredUrl().replace(/\/+$/, '') + '/api/info';
+        const headers: Record<string, string> = {};
+        if (this._cachedPassword) {
+          headers.Authorization = 'Basic ' + Buffer.from(`${this._cachedUsername || 'opencode'}:${this._cachedPassword}`).toString('base64');
+        }
+        const info = await fetch(infoUrl, { headers, signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS) });
+        if (info.status === 401) return 'auth-required';
+        if (info.ok && info.headers.get('content-type')?.includes('application/json')) {
+          const data = await info.json() as { version?: string };
+          if (generation !== this._serverGeneration || navigationKey !== this.navigationStateKey()) return 'disconnected';
+          if (typeof data.version === 'string' && /^2\./.test(data.version)) {
+            if (!this._webUiV2) this.log(`Detected OpenCode V2 web UI: ${data.version}`);
+            this._webUiV2 = true;
+            // A removed session is a valid route syntactically, but cannot be resumed.
+            const match = /^\/server\/([^/]+)\/session\/([^/?#]+)(?:[?#].*)?$/.exec(this._savedIframePath);
+            if (match && match[1] === Buffer.from(this.getUrlOrigin(this.getConfiguredUrl())).toString('base64url')) {
+              const session = await fetch(this.getConfiguredUrl().replace(/\/+$/, '') + '/api/session/' + encodeURIComponent(match[2]),
+                { headers, signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS) });
+              if (generation !== this._serverGeneration || navigationKey !== this.navigationStateKey()) return 'disconnected';
+              if (session.status === 404) {
+                this._savedIframePath = '/';
+                this._workspaceLaunchPending = false;
+                void this._globalState.update(this.navigationStateKey(), '/');
+                this._iframeNeedsNavigation = true;
+              }
+            }
+            return 'connected';
+          }
+        }
+        if (this._webUiV2) return 'disconnected';
+        this._webUiV2 = false;
+      }
       const resp = await fetch(url, {
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
         method: 'HEAD',
@@ -1283,13 +1428,15 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     if (
       state === this._connectionState &&
       !this._isReconnecting &&
-      !(state === 'connected' && !this._proxyPort && !this._proxyBaseUrl)
+      !this._iframeNeedsNavigation &&
+      !(state === 'connected' && !this._proxyReady)
     ) { return; }
 
     if (state === 'connected') {
-      if (!this._proxyPort && !this._proxyBaseUrl) {
+      if (!this._proxyReady) {
         const proxyReady = await this.startProxy();
-        if (gen !== this._serverGeneration || !proxyReady) {
+        if (gen !== this._serverGeneration) return;
+        if (!proxyReady) {
           this._connectionState = 'disconnected';
           this.updateStatusBar();
           this.sendStateUpdate();
@@ -1402,9 +1549,10 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       const state = await this.checkHealth();
       if (gen !== this._serverGeneration) { return; }
       if (state === 'connected' || state === 'auth-required') {
-        if (state === 'connected' && !this._proxyPort && !this._proxyBaseUrl) {
+        if (state === 'connected' && !this._proxyReady) {
           const proxyReady = await this.startProxy();
-          if (gen !== this._serverGeneration || !proxyReady) {
+          if (gen !== this._serverGeneration) return;
+          if (!proxyReady) {
             this.scheduleReconnect();
             return;
           }
@@ -1564,6 +1712,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     this.log(`iframe URL: ${iframeUrl} (showIframe=${showIframe})`);
 
     const activeLabel = activeServer?.label || activeServer?.url || 'Server';
+    const sidebarTheme = this.getSidebarThemePreference();
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -1580,17 +1729,17 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       --card-foreground: var(--vscode-foreground, #cccccc);
       --primary: var(--vscode-button-background, #007acc);
       --primary-foreground: var(--vscode-button-foreground, #ffffff);
-      --secondary: #2d2d2d;
-      --secondary-foreground: #cccccc;
-      --muted: #2d2d2d;
-      --muted-foreground: #888888;
-      --accent: #2d2d2d;
-      --accent-foreground: #cccccc;
-      --destructive: #e06c75;
-      --destructive-foreground: #ffffff;
-      --border: rgba(255,255,255,0.1);
-      --input: rgba(255,255,255,0.15);
-      --ring: rgba(255,255,255,0.3);
+      --secondary: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.16));
+      --secondary-foreground: var(--vscode-button-secondaryForeground, var(--vscode-foreground, #cccccc));
+      --muted: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.12));
+      --muted-foreground: var(--vscode-descriptionForeground, var(--vscode-foreground, #888888));
+      --accent: var(--vscode-list-hoverBackground, rgba(128,128,128,0.12));
+      --accent-foreground: var(--vscode-list-hoverForeground, var(--vscode-foreground, #cccccc));
+      --destructive: var(--vscode-errorForeground, #e06c75);
+      --destructive-foreground: var(--vscode-button-foreground, #ffffff);
+      --border: var(--vscode-panel-border, var(--vscode-widget-border, rgba(128,128,128,0.25)));
+      --input: var(--vscode-input-border, var(--vscode-panel-border, rgba(128,128,128,0.35)));
+      --ring: var(--vscode-focusBorder, #007acc);
       --radius: 0.625rem;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -1808,7 +1957,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     <a onclick="closePanel()">Close</a>
   </div>
 
-  <iframe id="ocFrame" onload="sendWorkspace()" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+  <iframe id="ocFrame" onload="sendWorkspace(); syncTheme()" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     ${iframeSrc} style="${iframeStyle}"></iframe>
 
   <div id="overlay" class="overlay ${overlayHidden ? 'hidden' : ''}">
@@ -1819,6 +1968,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const vscode = acquireVsCodeApi();
 
     let __overlayEditing = false;
+    let __sidebarTheme = ${JSON.stringify(sidebarTheme)};
 
     const __overlay = document.getElementById('overlay');
     __overlay.addEventListener('focusin', e => {
@@ -1859,7 +2009,12 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
           }
           iframe.style.display = msg.showIframe ? 'block' : 'none';
         }
+      } else if (msg.type === 'sidebarThemeChanged') {
+        __sidebarTheme = msg.theme === 'native' ? 'native' : 'beige';
+        syncTheme();
       } else if (msg.type === 'ocFrameUrlChanged') {
+        const frame = document.getElementById('ocFrame');
+        if (!frame || event.source !== frame.contentWindow || event.origin !== new URL(frame.src).origin) return;
         vscode.postMessage({ type: 'ocFrameUrlChanged', path: msg.path });
       }
     });
@@ -1940,14 +2095,13 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
 
     function syncTheme() {
       const classes = document.body.className;
-      const theme = classes.includes('vscode-dark') ? 'dark'
-        : classes.includes('vscode-high-contrast') ? 'high-contrast'
-        : 'light';
+      const dark = classes.includes('vscode-dark') || classes.includes('vscode-high-contrast');
+      const mode = dark && !classes.includes('vscode-high-contrast-light') ? 'dark' : 'light';
       const iframe = document.getElementById('ocFrame');
-      if (iframe && iframe.contentWindow) {
-        const origin = iframe.src ? new URL(iframe.src).origin : '*';
+      if (iframe && iframe.contentWindow && iframe.src) {
         iframe.contentWindow.postMessage(
-          { type: 'opencodeTheme', theme, source: 'vscode' }, origin
+          { type: 'ocSidebarTheme', theme: __sidebarTheme, mode, source: 'vscode' },
+          new URL(iframe.src).origin
         );
       }
     }

@@ -5,7 +5,8 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import type * as net from 'net';
-import { OPENCODE_PROJECT_BOOTSTRAP_SCRIPT } from './OpenCodeProjectBootstrap';
+import { OPENCODE_PROJECT_BOOTSTRAP_SCRIPT, OPENCODE_V2_BOOTSTRAP_SCRIPT } from './OpenCodeProjectBootstrap';
+import { SIDEBAR_THEME_SCRIPT, SIDEBAR_THEME_STYLE } from './SidebarTheme';
 
 const BLOCKED_HEADERS = new Set([
   'content-security-policy',
@@ -20,7 +21,7 @@ const PORT_MIN = 4097;
 const PORT_MAX = 5002;
 // Changing proxy semantics requires a distinct shared-proxy key so an updated
 // extension never reconnects to an older VS Code process still hosting it.
-const PROXY_FEATURE_KEY = 'web-sidebar-injection-v6';
+const PROXY_FEATURE_KEY = 'web-sidebar-injection-v8';
 
 const LOCK_DIR = path.join(STATE_DIR, 'proxy-state.lock');
 const LOCK_STALE_MS = 5000;
@@ -460,7 +461,10 @@ function injectWebSidebarScript(html: string): string {
     return html;
   }
 
-  const injectedScripts = OPENCODE_PROJECT_BOOTSTRAP_SCRIPT
+  // The theme script must run before the URL tracker: it consumes and strips
+  // the one-time theme query hint so the tracker never persists it.
+  const injectedScripts = SIDEBAR_THEME_STYLE + SIDEBAR_THEME_SCRIPT
+    + OPENCODE_V2_BOOTSTRAP_SCRIPT + OPENCODE_PROJECT_BOOTSTRAP_SCRIPT
     + WEBSIDEBAR_URL_TRACKER
     + WEBSIDEBAR_FOCUS_GUARD_SCRIPT
     + WEBSIDEBAR_MOBILE_COMPOSER_FIX_SCRIPT;

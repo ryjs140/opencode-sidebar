@@ -4,3 +4,7 @@ node_modules
 .vscode-test/
 *.vsix
 logs/
+*.log
+.env
+.env.*
+tmp/

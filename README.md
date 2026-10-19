@@ -2,6 +2,13 @@
 
 Renders your [OpenCode](https://opencode.ai) web UI right inside VS Code's sidebar — connects to your server or starts a new one.
 
+> **Fork note:** this is a personal fork of
+> [bmpenuelas/opencode-web-sidebar](https://github.com/bmpenuelas/opencode-web-sidebar)
+> maintained by [ryjs](https://github.com/ryjs140). It adds a beige/sepia theme
+> for the embedded OpenCode page and keeps the V2 compatibility fixes. It is
+> **not** an official OpenCode extension and is not affiliated with the OpenCode
+> project or with the original author.
+
 💫 Now automatically opens a new session in your working project folder when the sidebar initializes!
 
 Works with both the **new** and old OpenCode Web UI. Also available on [Android](https://play.google.com/store/apps/details?id=com.logicedge.opencodemobile) and [iOS](https://apps.apple.com/app/id6787161501) for coding away from your computer:
@@ -18,12 +25,12 @@ Works with both the **new** and old OpenCode Web UI. Also available on [Android]
 - 🔔 **Status bar indicator** — shows connection state at a glance
 - 🚀 **Start/Stop server** — click a button to run `opencode web` if the server is not running; stop it when done
 - 🔃 **Auto-reconnect** — automatically retries when the server is unreachable (with Cancel button)
-- 🎨 **Theme sync** — follows VS Code's light/dark mode automatically
+- 🎨 **Theme** — the embedded OpenCode page uses a beige/sepia palette matching the author's VS Code theme (`beige`, default) or leaves OpenCode's own theme untouched (`native`); the shell follows VS Code's light/dark mode automatically
 - 🔑 **Password support** — credentials stored securely in your OS keychain via VS Code SecretStorage
 - 🔐 **Env var fallback** — reads `OPENCODE_SERVER_PASSWORD` if no password is stored
 - 📁 **Open files** — open files in VS Code directly from the webview
 - 🌐 **Proxy** — local proxy strips frame-blocking headers for seamless iframe embedding and prevents losing the cursor focus while typing in files
-- 📍 **Workspace routing** — registers and opens the current VS Code folder through OpenCode's project URL, including folders never opened in the new web UI, and starts a fresh draft when the sidebar initializes or the workspace changes
+- 📍 **Workspace routing** — registers and opens the current VS Code folder through OpenCode's project URL, including folders never opened in the new web UI, and restores the last tracked session for each server/workspace (or starts a draft on first use)
 - 🔗 **Remote SSH** — works with [VSCode Remote SSH](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) via automatic port forwarding
 
 ## ❗ Important: requirements
@@ -71,6 +78,7 @@ All commands are available via the Command Palette (`Ctrl+Shift+P`).
 | `opencode-web-sidebar.hideButton` | `false` | Hide the OpenCode icon from the editor title bar |
 | `opencode-web-sidebar.autoReconnect` | `true` | Automatically retry when the server is unreachable |
 | `opencode-web-sidebar.maxReconnectAttempts` | `0` | Maximum reconnection attempts (0 = unlimited) |
+| `opencode-web-sidebar.theme` | `beige` | Palette applied inside the embedded OpenCode page: `beige` (sepia, matches the author's VS Code theme, includes a warm dark variant) or `native` (leave OpenCode's own theme and color scheme untouched) |
 | `opencode-web-sidebar.serverCommand` | `opencode web --port 4096` | Shell command to start the server (split by whitespace) |
 | `opencode-web-sidebar.workspacePathStyle` | `none` | Path translation mode for workspace folder: `Do not translate` (pass raw path), `WSL / Linux` (convert `C:\...` to `/mnt/c/...` for WSL/Linux servers) |
 
@@ -106,7 +114,9 @@ If your OpenCode server is password-protected:
 
 ## Contributing
 
-PRs are welcome! If you'd like to contribute, please open an issue first to discuss the change.
+This is a personal fork. Issues and pull requests are welcome, but support is
+best-effort. For upstream features and the official extension, see
+[bmpenuelas/opencode-web-sidebar](https://github.com/bmpenuelas/opencode-web-sidebar).
 
 ### Development
 
@@ -115,3 +125,19 @@ PRs are welcome! If you'd like to contribute, please open an issue first to disc
 3. Press `F5` to launch a new Extension Development Host window.
 4. Run `npm run compile` to rebuild after editing TypeScript files, or `npm run watch` for auto-recompilation.
 5. Check the **OpenCode Sidebar** output channel (View → Output) for debug logs.
+
+### OpenCode V2 compatibility (0.22.0)
+
+V2 is detected through the authenticated `/api/info` JSON response. It opens
+through `/`, registers the workspace and draft before the app starts, and uses
+V2's `/new-session?draftId=...` and `/server/:serverKey/session/:id` routes.
+The old UI keeps its existing workspace route. Session paths are saved per
+server/workspace and rebound when the proxy port changes. V2's `/global/health`
+can return the HTML app with status 200; it does not prove API authentication.
+Use **OpenCode: Set Server Password** if the panel reports Password Required.
+
+The beige theme is injected into the OpenCode page by the local proxy; it only
+overrides CSS variables and never modifies OpenCode routes, storage, auth, or
+application code. See [the theme notes](docs/theme.md) and
+[the compatibility report](docs/compatibility-v2.md) for evidence, test
+limits, build instructions, and Remote SSH installation.

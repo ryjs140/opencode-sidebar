@@ -11,7 +11,13 @@ export function encodeOpenCodeRouteSegment(value: string): string {
     .replace(/=+$/, '');
 }
 
-export function getWorkspaceSessionPath(workspaceFolder: string): string {
+export function getWorkspaceSessionPath(workspaceFolder: string, v2 = false, restorePath = ''): string {
+  if (v2) {
+    const query = new URLSearchParams();
+    if (workspaceFolder) query.set('_ocWorkspace', workspaceFolder);
+    if (restorePath) query.set('_ocRestore', restorePath);
+    return query.size ? `/?${query}` : '/';
+  }
   return workspaceFolder ? `/${encodeOpenCodeRouteSegment(workspaceFolder)}/session` : '';
 }
 
@@ -59,4 +65,21 @@ function isConcreteSessionPath(value: string): boolean {
   const pathname = new URL(value, 'http://opencode.local').pathname;
   return /^\/server\/[^/]+\/session\/[^/]+$/.test(pathname)
     || /^\/[^/]+\/session\/[^/]+$/.test(pathname);
+}
+
+/** Rebase only this proxy's server key; other servers' session routes stay intact. */
+export function rebaseSessionPath(path: string, from: string, to: string): string {
+  const prefix = `/server/${encodeOpenCodeRouteSegment(from)}/session/`;
+  return path.startsWith(prefix)
+    ? `/server/${encodeOpenCodeRouteSegment(to)}/session/` + path.slice(prefix.length)
+    : path;
+}
+
+export function isV2AppPath(path: string): boolean {
+  if (!isRelativeAppPath(path)) return false;
+  const url = new URL(path, 'http://opencode.local');
+  if (['/', '/settings', '/new-session'].includes(url.pathname)) return true;
+  const match = /^\/server\/([^/]+)\/session\/([^/]+)$/.exec(url.pathname);
+  if (!match) return false;
+  return encodeOpenCodeRouteSegment(Buffer.from(match[1], 'base64url').toString('utf8')) === match[1];
 }
