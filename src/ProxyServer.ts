@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import type * as net from 'net';
 import { OPENCODE_PROJECT_BOOTSTRAP_SCRIPT, OPENCODE_V2_BOOTSTRAP_SCRIPT } from './OpenCodeProjectBootstrap';
 import { SIDEBAR_THEME_SCRIPT, SIDEBAR_THEME_STYLE } from './SidebarTheme';
+import { basicAuthorization } from './Authentication';
 
 const BLOCKED_HEADERS = new Set([
   'content-security-policy',
@@ -22,7 +23,7 @@ const PORT_MIN = 4097;
 const PORT_MAX = 5002;
 // Changing proxy semantics requires a distinct shared-proxy key so an updated
 // extension never reconnects to an older VS Code process still hosting it.
-const PROXY_FEATURE_KEY = 'web-sidebar-injection-v9';
+const PROXY_FEATURE_KEY = 'web-sidebar-injection-v10-auth';
 
 const LOCK_DIR = path.join(STATE_DIR, 'proxy-state.lock');
 const LOCK_STALE_MS = 5000;
@@ -688,7 +689,7 @@ interface SharedProxyHandle {
 export async function getOrCreateProxy(targetUrl: string): Promise<SharedProxyHandle> {
   const parsed = new URL(targetUrl);
   const auth = parsed.username
-    ? `Basic ${Buffer.from(`${parsed.username}:${parsed.password}`).toString('base64')}`
+    ? basicAuthorization(decodeURIComponent(parsed.username), decodeURIComponent(parsed.password))
     : null;
   const authKey = auth ? crypto.createHash('sha256').update(auth).digest('hex') : 'none';
   const key = `${parsed.protocol}//${parsed.host}|auth=${authKey}|features=${PROXY_FEATURE_KEY}`;

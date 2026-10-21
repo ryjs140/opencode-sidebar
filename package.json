@@ -2,7 +2,7 @@
   "name": "opencode-web-sidebar",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.22.3",
+  "version": "0.22.4",
   "license": "MIT",
   "publisher": "ryjs",
   "author": {
@@ -262,7 +262,7 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint src",
     "pretest": "npm run compile && npm run lint",
-    "test": "node --test out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js out/OpenCodePanel.test.js out/SidebarTheme.test.js",
+    "test": "node --test out/Authentication.test.js out/WorkspaceNavigation.test.js out/OpenCodeProjectBootstrap.test.js out/OpenCodePanel.test.js out/SidebarTheme.test.js",
     "verify:nls": "node scripts/verify-nls.cjs",
     "verify:l10n": "node scripts/verify-l10n.cjs",
     "publish:marketplace": "vsce package && vsce publish",
